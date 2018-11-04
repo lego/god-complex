@@ -23,3 +23,8 @@ class Faction:
         return '<Faction {} settlements={}>'.format(
             color(self.name, self.color),
             self.settlements)
+
+    def __str__(self, use_color=False):
+        if use_color:
+            return color(self.name, self.color)
+        return self.name

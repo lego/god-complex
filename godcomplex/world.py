@@ -18,8 +18,9 @@ MAX_NUM_ATTEMPTS = 1000
 MOISTURE_FACTOR = 0.95
 MOISTURE_CLASS = 0.16
 
+
 class World(LayerCollection):
-    def __init__(self, width=300, height=60, db=None):
+    def __init__(self, width=200, height=60, db=None):
         super().__init__(width, height)
         self.db = db
         self.agents = {}
@@ -61,10 +62,10 @@ class World(LayerCollection):
     def get_neighbors(self, x, y, diagonals=False):
         adjacent_x = [(x - 1) % self.width, x, (x + 1) % self.width]
         adjacent_y = [yi for yi in [y - 1, y, y + 1]
-            if yi >= 0 and yi < self.height]
+                      if yi >= 0 and yi < self.height]
         return [coord for coord in itertools.product(adjacent_x, adjacent_y)
-            if coord != (x, y) and
-            (diagonals or (coord[0] == x or coord[1] == y))]
+                if coord != (x, y) and
+                (diagonals or (coord[0] == x or coord[1] == y))]
 
     def get_neighbor(self, x, y, direction):
         dx, dy = direction
@@ -76,7 +77,7 @@ class World(LayerCollection):
 
     def init_terrain(self):
         self._add_layer('elevation',
-            full_layer=Terraform.simplex(self.width, self.height))
+                        full_layer=Terraform.simplex(self.width, self.height))
         return self
 
     def init_moisture(self):
@@ -88,16 +89,17 @@ class World(LayerCollection):
         # cells are traversed using BFS from river tiles to ensure that we visit
         # higher-moisture tiles first.
         q = [(cell, cell) for cell in self._all_cells()
-            if self.get_moisture(*cell)]
+             if self.get_moisture(*cell)]
         visited = set()
         while q:
             cell, src = q.pop(0)
             if (cell in visited or
-                not Terraform.get_height_class(self.get_elevation(*cell))):
+                    not Terraform.get_height_class(self.get_elevation(*cell))):
                 continue
             visited.add(cell)
             dist = Geometry.distance_2d(cell, src)
-            self.set_moisture(*cell, val=max(1, int((MOISTURE_FACTOR ** dist) / MOISTURE_CLASS)))
+            self.set_moisture(
+                *cell, val=max(1, int((MOISTURE_FACTOR ** dist) / MOISTURE_CLASS)))
             for neighbor in self.get_neighbors(*cell):
                 q.append((neighbor, src))
         return self
@@ -117,7 +119,7 @@ class World(LayerCollection):
                 next_cell = self.get_neighbor(*curpos, direction=curdir)
                 if not next_cell or self.get_elevation(*next_cell) > self.get_elevation(*curpos):
                     directions = [d for d in Directions.all()
-                        if self.get_neighbor(*curpos, direction=d) and not self.get_moisture(*self.get_neighbor(*curpos, direction=d))]
+                                  if self.get_neighbor(*curpos, direction=d) and not self.get_moisture(*self.get_neighbor(*curpos, direction=d))]
                     if not directions:
                         break
                     curdir = random.choice(directions)
@@ -128,11 +130,11 @@ class World(LayerCollection):
 
     def init_biomes(self):
         self._add_layer('biome',
-            full_layer=[[Biome.determine_biome(
-                latitude=self.get_latitude(y=y),
-                elevation=self.get_elevation(x, y),
-                moisture=self.get_moisture(x, y)
-            ) for x in range(self.width)] for y in range(self.height)])
+                        full_layer=[[Biome.determine_biome(
+                            latitude=self.get_latitude(y=y),
+                            elevation=self.get_elevation(x, y),
+                            moisture=self.get_moisture(x, y)
+                        ) for x in range(self.width)] for y in range(self.height)])
         return self
 
     def init_resources(self):
@@ -141,7 +143,7 @@ class World(LayerCollection):
     def move_agent(self, agent, x, y):
         if agent.position:
             self.mutate_agent_position(*agent.position,
-                fn=lambda value: value.remove(agent.id))
+                                       fn=lambda value: value.remove(agent.id))
 
         self.mutate_agent_position(x, y, fn=lambda value: value.add(agent.id))
         agent.position = (x, y)
@@ -157,8 +159,8 @@ class World(LayerCollection):
         # The agent_positions layer consists of a set of uuids representing
         # the agents on a cell.
         self._add_layer('agent_position',
-            full_layer=[[set() for x in range(self.width)]
-                for y in range(self.height)])
+                        full_layer=[[set() for x in range(self.width)]
+                                    for y in range(self.height)])
         self._add_layer('settlement', defaultval=None)
 
         # return the "Eden agent" (i.e. first settler) for each different
@@ -167,9 +169,9 @@ class World(LayerCollection):
             faction = Faction(people=people)
             self.add_faction(faction)
             agent = Agent(world=self,
-                faction=faction,
-                agent_type=AgentType.SETTLER,
-                goals=[AgentActions.settle])
+                          faction=faction,
+                          agent_type=AgentType.SETTLER,
+                          goals=[AgentActions.settle])
             self.add_agent(agent)
             self.place_agent(agent)
 
@@ -182,6 +184,13 @@ class World(LayerCollection):
         self.init_peoples()
 
     def step(self):
+        """
+        Returns ListOf(HistoricalEvent) of all events that occured
+        during the time step.
+        """
+        # FIXME(joey): Include world-level steps. Maybe this should
+        # instead be a separate function due to the time scale
+        # difference.
         for _, agent in self.agents.items():
             self.history.record(agent, *agent.step())
 
@@ -189,4 +198,6 @@ class World(LayerCollection):
             self.add_agent(agent)
             self.history.record(agent, AgentActions.spawn)
 
+        events = self.history.events_at_timestamp(self.history.current_timestamp)
         self.history.advance()
+        return events
